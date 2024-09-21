@@ -1,0 +1,33 @@
+local PlayersService = game:GetService("Players")
+local player = PlayersService.LocalPlayer
+local TeleportService = game:GetService("TeleportService")
+local TextService = game:GetService("TextChatService")
+local chat = TextService.TextChannels["RBXGeneral"]
+
+local main = 606849621
+local tradeWorld = 9780994092
+
+if game.PlaceId == main then
+    TeleportService:Teleport(tradeWorld, player)
+end
+
+local messages = {
+    "1",
+    "2",
+    "3"
+}
+
+function chatSpam()
+    chat:SendAsync(messages[math.random(1, #messages)])
+end
+task.wait(15)
+for i = 1, 5 do
+    chatSpam()
+    wait(4) 
+end
+
+task.wait(60)
+
+if game.PlaceId == tradeWorld then
+    TeleportService:Teleport(main, player)
+end
