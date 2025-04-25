@@ -1,0 +1,204 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+local Webhook = ""
+local user = ""
+local Window = OrionLib:MakeWindow({Name = "Jarells BB AutoFarm", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionTest"})
+
+local Tab = Window:MakeTab({
+	Name = "AutoFarm",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+--[[
+Name = <string> - The name of the tab.
+Icon = <string> - The icon of the tab.
+PremiumOnly = <bool> - Makes the tab accessible to Sirus Premium users only.
+]]
+
+Tab:AddTextbox({
+	Name = "Your Webhook",
+	Default = "default box input",
+	TextDisappear = true,
+	Callback = function(Value)
+		Webhook = Value
+	end	  
+})
+Tab:AddTextbox({
+	Name = "User to ping",
+	Default = "<@USER-ID>",
+	TextDisappear = true,
+	Callback = function(Value)
+		user = Value
+	end	  
+})
+-- PLAYER CONSTANTS
+local plr = game.Players.LocalPlayer
+local char = plr.Character or plr.CharacterAdded:Wait()
+local hum = char:WaitForChild("Humanoid")
+local hrp = char:WaitForChild("HumanoidRootPart")
+local Wins = plr.leaderstats:WaitForChild("Wins")
+local Elims = plr.leaderstats:WaitForChild("Elims")
+
+-- CONSTANTS
+local ALIVE = false
+local MOVE_DISTANCE = 20
+local AliveFolder = game.Workspace.Alive
+local BallsFolder = game.Workspace.Balls
+local lastHitTime = 0 -- Tracks the time of the last hit
+local cachedBall = nil
+
+print("Script started!")
+
+-- Function to handle the player's match decision (75% win, 25% lose)
+local function handleMatchDecision()
+	if ALIVE then return end
+	for _, player in pairs(AliveFolder:GetChildren()) do
+		if player.Name == plr.Name then
+			print("Alive!")
+			ALIVE = true
+			char = plr.Character or plr.CharacterAdded:Wait()
+			hum = char:WaitForChild("Humanoid")
+			hrp = char:WaitForChild("HumanoidRootPart")
+			local decision = math.random(1, 4) -- 1 to 4 for a 75% chance to win
+			if decision <= 3 then
+				print("Will win the match!")
+				WinMatch()
+			else
+				print("Will lose the match!")
+				loseMatch()
+			end
+			break
+		end
+	end
+end
+
+-- Function to handle when the player leaves the Alive folder
+local function resetAliveStatus()
+	for _, player in pairs(AliveFolder:GetChildren()) do
+		if player.Name == plr.Name then return end
+	end
+	print("You are dead! Resetting...")
+	char = plr.Character or plr.CharacterAdded:Wait()
+	hum = char:WaitForChild("Humanoid")
+	hrp = char:WaitForChild("HumanoidRootPart")
+	ALIVE = false
+	move()
+	mouse1click()
+end
+
+-- Function to find the ball with movement detection
+local function findBall()
+    if cachedBall and cachedBall.Parent == BallsFolder then
+        return cachedBall
+    end
+
+    for _, ball in ipairs(BallsFolder:GetChildren()) do
+        local initialPos = ball.Position
+        task.wait(0.1)
+        if (ball.Position - initialPos).Magnitude > 0.1 then
+            print("Ball found:", ball.Name)
+            cachedBall = ball
+            return ball
+        end
+    end
+    print("No moving ball found, retrying...")
+    return nil
+end
+
+-- Function to win the match
+function WinMatch()
+	mouse1click()
+	task.spawn(function()
+		while ALIVE do
+			local Ball = findBall()
+			if Ball then
+				hrp.CFrame = CFrame.new(hrp.Position, Ball.Position)
+				print("Locked on to ball!")
+			end
+			task.wait(0.1)
+		end
+	end)
+	task.spawn(function()
+		while ALIVE do
+			hit()
+		end
+	end)
+end
+
+-- Function to perform hits on the ball with a 0.7-second delay between hits
+function hit()
+	local DISTANCE = 30
+	local currentTime = os.clock()
+
+	if currentTime - lastHitTime >= 0.1 then
+		local Ball = findBall()
+		if Ball and (Ball.Position - hrp.Position).Magnitude <= DISTANCE then
+			mouse1click()
+			lastHitTime = currentTime
+			print("Hit registered!")
+		end
+	end
+	task.wait(0.0001) -- Ensures periodic checks
+end
+
+-- Function to lose the match
+function loseMatch()
+	move()
+	print("Lost the match!")
+	mouse1click()
+end
+
+-- Function to make the player move randomly
+function move()
+	hum:MoveTo(Vector3.new(hrp.Position.X, hrp.Position.Y, hrp.Position.Z + MOVE_DISTANCE))
+	task.wait(0.5)
+	hum:MoveTo(Vector3.new(hrp.Position.X - MOVE_DISTANCE, hrp.Position.Y, hrp.Position.Z))
+	task.wait(0.5)
+	hum:MoveTo(Vector3.new(hrp.Position.X + (MOVE_DISTANCE * 2), hrp.Position.Y, hrp.Position.Z))
+	task.wait(0.5)
+	hum:MoveTo(Vector3.new(hrp.Position.X - MOVE_DISTANCE, hrp.Position.Y, hrp.Position.Z))
+end
+
+-- Connections for player alive status
+AliveFolder.ChildAdded:Connect(handleMatchDecision)
+AliveFolder.ChildRemoved:Connect(resetAliveStatus)
+
+-- Constantly check for changes in Wins and Elims and send a webhook
+task.spawn(function()
+	local lastWins = Wins.Value
+	local lastElims = Elims.Value
+
+	while true do
+		if Wins.Value ~= lastWins then
+			local message = user .. " You got a Win! Current Wins: " .. Wins.Value
+			local webhookUrl = Webhook
+			sendDiscordWebhook(webhookUrl, message)
+			lastWins = Wins.Value  -- Update lastWins to current value
+		end
+
+		if Elims.Value ~= lastElims then
+			local message = user.. " You got a Kill! Current Kills: " .. Elims.Value
+			local webhookUrl = Webhook
+			sendDiscordWebhook(webhookUrl, message)
+			lastElims = Elims.Value  -- Update lastElims to current value
+		end
+		task.wait(1)  -- Check every 1 second to reduce server load
+	end
+end)
+
+-- Send Discord Webhook function (common for both Wins and Elims)
+function sendDiscordWebhook(webhookUrl, message)
+	local data = { content = message }
+	local body = game:GetService("HttpService"):JSONEncode(data)
+
+	local response = http.request({
+		Url = webhookUrl,
+		Method = "POST",
+		Headers = { ["Content-Type"] = "application/json" },
+		Body = body
+	})
+
+	return response
+end
+
+OrionLib:Init()
