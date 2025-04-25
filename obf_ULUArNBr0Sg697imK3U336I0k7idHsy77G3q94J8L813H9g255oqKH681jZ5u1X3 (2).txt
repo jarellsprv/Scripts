@@ -1,4 +1,4 @@
-main.py:
+main.py
 import subprocess
 import time
 
@@ -352,7 +352,7 @@ def initilization():
                 path = "cookies.txt"
                 with open(path, "r") as f:
                     cookies = f.read().splitlines()
-                time.sleep(10)
+                time.sleep(60)
                 for i in range(num):
                     status = LoginProcess(cookies[i], placeId)
                     if status == "Error":
@@ -368,6 +368,7 @@ def initilization():
 if __name__ == "__main__":
     threading.Thread(target=initilization, daemon=True).start()
     run_flask()
+
 
 functions.py:
 from imports import *
