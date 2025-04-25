@@ -344,6 +344,7 @@ def initilization():
                         print("That cookie is already in the cookies.txt file. ")
 
             elif cmd.startswith("change script [") and cmd.endswith("]"):
+                placeId = int(input("What is the place id? (MUST BE NUMBERS:"))
                 new_script = cmd[len("change script ["):-1].strip()
                 change_script(new_script)
                 stop_all()
@@ -351,9 +352,9 @@ def initilization():
                 path = "cookies.txt"
                 with open(path, "r") as f:
                     cookies = f.read().splitlines()
-
+                time.sleep(10)
                 for i in range(num):
-                    status = LoginProcess(cookies[i], place)
+                    status = LoginProcess(cookies[i], placeId)
                     if status == "Error":
                         raise Exception("Restart the script. A fatal error has occured")
                         break
@@ -367,6 +368,7 @@ def initilization():
 if __name__ == "__main__":
     threading.Thread(target=initilization, daemon=True).start()
     run_flask()
+
 functions.py:
 from imports import *
 AuthTickets = {}
