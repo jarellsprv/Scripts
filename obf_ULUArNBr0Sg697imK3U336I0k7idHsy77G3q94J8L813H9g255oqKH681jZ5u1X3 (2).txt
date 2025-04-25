@@ -1,204 +1,639 @@
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-local Webhook = ""
-local user = ""
-local Window = OrionLib:MakeWindow({Name = "Jarells BB AutoFarm", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionTest"})
+main.py:
+import subprocess
+import time
 
-local Tab = Window:MakeTab({
-	Name = "AutoFarm",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
+from functions import *
+delay = 0
+webhookUrl = None
+WebhookScript = f"""
+function Webhook()
+    local HttpService = game:GetService("HttpService")
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
 
---[[
-Name = <string> - The name of the tab.
-Icon = <string> - The icon of the tab.
-PremiumOnly = <bool> - Makes the tab accessible to Sirus Premium users only.
-]]
+    local url = "{webhookUrl}"
 
-Tab:AddTextbox({
-	Name = "Your Webhook",
-	Default = "default box input",
-	TextDisappear = true,
-	Callback = function(Value)
-		Webhook = Value
-	end	  
-})
-Tab:AddTextbox({
-	Name = "User to ping",
-	Default = "<@USER-ID>",
-	TextDisappear = true,
-	Callback = function(Value)
-		user = Value
-	end	  
-})
--- PLAYER CONSTANTS
-local plr = game.Players.LocalPlayer
-local char = plr.Character or plr.CharacterAdded:Wait()
-local hum = char:WaitForChild("Humanoid")
-local hrp = char:WaitForChild("HumanoidRootPart")
-local Wins = plr.leaderstats:WaitForChild("Wins")
-local Elims = plr.leaderstats:WaitForChild("Elims")
+    local username = LocalPlayer.Name
+    local userId = LocalPlayer.UserId
+    local placeName = game.Name ~= "" and game.Name or game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    local playerCount = #Players:GetPlayers()
+    local serverUptime = os.clock()
 
--- CONSTANTS
-local ALIVE = false
-local MOVE_DISTANCE = 20
-local AliveFolder = game.Workspace.Alive
-local BallsFolder = game.Workspace.Balls
-local lastHitTime = 0 -- Tracks the time of the last hit
-local cachedBall = nil
+    local embed = {{
+        ["title"] = "Server Hop Log",
+        ["color"] = 65280,
+        ["fields"] = {{
+            {{ ["name"] = "Username", ["value"] = username, ["inline"] = true }},
+            {{ ["name"] = "User ID", ["value"] = tostring(userId), ["inline"] = true }},
+            {{ ["name"] = "Game", ["value"] = placeName, ["inline"] = false }},
+            {{ ["name"] = "Server Players", ["value"] = tostring(playerCount), ["inline"] = true }},
+            {{ ["name"] = "Server Uptime (s)", ["value"] = string.format("%.0f", serverUptime), ["inline"] = true }}
+        }},
+        ["footer"] = {{ ["text"] = "tinyurl.com/versitile" }},
+        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    }}
 
-print("Script started!")
+    local data = {{
+        ["username"] = "Versitiles Botting Service",
+        ["embeds"] = {{embed}}
+    }}
 
--- Function to handle the player's match decision (75% win, 25% lose)
-local function handleMatchDecision()
-	if ALIVE then return end
-	for _, player in pairs(AliveFolder:GetChildren()) do
-		if player.Name == plr.Name then
-			print("Alive!")
-			ALIVE = true
-			char = plr.Character or plr.CharacterAdded:Wait()
-			hum = char:WaitForChild("Humanoid")
-			hrp = char:WaitForChild("HumanoidRootPart")
-			local decision = math.random(1, 4) -- 1 to 4 for a 75% chance to win
-			if decision <= 3 then
-				print("Will win the match!")
-				WinMatch()
-			else
-				print("Will lose the match!")
-				loseMatch()
-			end
-			break
-		end
-	end
-end
+    local jsonData = HttpService:JSONEncode(data)
 
--- Function to handle when the player leaves the Alive folder
-local function resetAliveStatus()
-	for _, player in pairs(AliveFolder:GetChildren()) do
-		if player.Name == plr.Name then return end
-	end
-	print("You are dead! Resetting...")
-	char = plr.Character or plr.CharacterAdded:Wait()
-	hum = char:WaitForChild("Humanoid")
-	hrp = char:WaitForChild("HumanoidRootPart")
-	ALIVE = false
-	move()
-	mouse1click()
-end
+    local success, response = pcall(function()
+        return HttpService:PostAsync(url, jsonData, Enum.HttpContentType.ApplicationJson)
+    end)
 
--- Function to find the ball with movement detection
-local function findBall()
-    if cachedBall and cachedBall.Parent == BallsFolder then
-        return cachedBall
+    if success then
+        print("Embed webhook sent successfully!")
+    else
+        warn("Failed to send embed: ", response)
     end
 
-    for _, ball in ipairs(BallsFolder:GetChildren()) do
-        local initialPos = ball.Position
-        task.wait(0.1)
-        if (ball.Position - initialPos).Magnitude > 0.1 then
-            print("Ball found:", ball.Name)
-            cachedBall = ball
-            return ball
+    task.wait({delay})
+end
+
+task.spawn(Webhook)
+"""
+ServerHopScript = f"""
+function ServerHop()
+    local HttpService = game:GetService("HttpService")
+    local TeleportService = game:GetService("TeleportService")
+    local Players = game:GetService("Players")
+
+    local url = "http://127.0.0.1:5000/svr"
+
+    while true do
+        task.wait({delay})
+
+        local response = request({{
+            Url = url,
+            Method = "GET",
+            Headers = {{
+                ["Content-Type"] = "application/json"
+            }}
+        }})
+
+        if response.StatusCode == 200 then
+            local result = HttpService:JSONDecode(response.Body)
+            local serverId = result.ServerId
+            print("Returned Server ID:", serverId)
+
+            TeleportService:TeleportToPlaceInstance(placeId, serverId, Players.LocalPlayer)
+            break
+        else
+            print("There was an error with the GET request!")
         end
     end
-    print("No moving ball found, retrying...")
-    return nil
 end
 
--- Function to win the match
-function WinMatch()
-	mouse1click()
-	task.spawn(function()
-		while ALIVE do
-			local Ball = findBall()
-			if Ball then
-				hrp.CFrame = CFrame.new(hrp.Position, Ball.Position)
-				print("Locked on to ball!")
-			end
-			task.wait(0.1)
-		end
-	end)
-	task.spawn(function()
-		while ALIVE do
-			hit()
-		end
-	end)
-end
+task.spawn(ServerHop)
+"""
 
--- Function to perform hits on the ball with a 0.7-second delay between hits
-function hit()
-	local DISTANCE = 30
-	local currentTime = os.clock()
+# Default script content
+DefaultScrpt = """print("yes i auto executed fr")
+local HttpService = game:GetService("HttpService")
+workspace = game:GetService("Workspace")
+workspace.StreamingEnabled = true
+workspace.StreamingTargetRadius = 5
 
-	if currentTime - lastHitTime >= 0.1 then
-		local Ball = findBall()
-		if Ball and (Ball.Position - hrp.Position).Magnitude <= DISTANCE then
-			mouse1click()
-			lastHitTime = currentTime
-			print("Hit registered!")
-		end
-	end
-	task.wait(0.0001) -- Ensures periodic checks
-end
-
--- Function to lose the match
-function loseMatch()
-	move()
-	print("Lost the match!")
-	mouse1click()
-end
-
--- Function to make the player move randomly
-function move()
-	hum:MoveTo(Vector3.new(hrp.Position.X, hrp.Position.Y, hrp.Position.Z + MOVE_DISTANCE))
-	task.wait(0.5)
-	hum:MoveTo(Vector3.new(hrp.Position.X - MOVE_DISTANCE, hrp.Position.Y, hrp.Position.Z))
-	task.wait(0.5)
-	hum:MoveTo(Vector3.new(hrp.Position.X + (MOVE_DISTANCE * 2), hrp.Position.Y, hrp.Position.Z))
-	task.wait(0.5)
-	hum:MoveTo(Vector3.new(hrp.Position.X - MOVE_DISTANCE, hrp.Position.Y, hrp.Position.Z))
-end
-
--- Connections for player alive status
-AliveFolder.ChildAdded:Connect(handleMatchDecision)
-AliveFolder.ChildRemoved:Connect(resetAliveStatus)
-
--- Constantly check for changes in Wins and Elims and send a webhook
-task.spawn(function()
-	local lastWins = Wins.Value
-	local lastElims = Elims.Value
-
-	while true do
-		if Wins.Value ~= lastWins then
-			local message = user .. " You got a Win! Current Wins: " .. Wins.Value
-			local webhookUrl = Webhook
-			sendDiscordWebhook(webhookUrl, message)
-			lastWins = Wins.Value  -- Update lastWins to current value
-		end
-
-		if Elims.Value ~= lastElims then
-			local message = user.. " You got a Kill! Current Kills: " .. Elims.Value
-			local webhookUrl = Webhook
-			sendDiscordWebhook(webhookUrl, message)
-			lastElims = Elims.Value  -- Update lastElims to current value
-		end
-		task.wait(1)  -- Check every 1 second to reduce server load
-	end
+-- DO NOT REMOVE THIS CODE BELOW ↓
+local success, message = pcall(function()
+    -- put your script here
 end)
+-- DO NOT REMOVE THIS CODE ABOVE ↑
 
--- Send Discord Webhook function (common for both Wins and Elims)
-function sendDiscordWebhook(webhookUrl, message)
-	local data = { content = message }
-	local body = game:GetService("HttpService"):JSONEncode(data)
+if not success then
+    local url = "http://127.0.0.1:5000/error"
+    local data = {
+        message = "Test error"
+    }
 
-	local response = http.request({
-		Url = webhookUrl,
-		Method = "POST",
-		Headers = { ["Content-Type"] = "application/json" },
-		Body = body
-	})
+    local jsonData = HttpService:JSONEncode(data)
 
-	return response
+    local response = request({
+        Url = url,
+        Method = "POST",
+        Body = jsonData,
+        Headers = {
+            ["Content-Type"] = "application/json"
+        }
+    })
+
+    if response.StatusCode == 200 then
+        print("Request was successful!")
+    else
+        print("There was an error with posting the request!")
+    end
 end
+"""
 
-OrionLib:Init()
+
+# Flask app initialization
+app = Flask(__name__)
+
+
+@app.route('/error', methods=["POST"])
+def handle_error():
+    data = request.get_json()
+    if data:
+        print("An error has occurred in your roblox script.")
+        return jsonify({"status": "error", "message": "Error reported, please check your script."}), 200
+    return jsonify({"message": "No data received"}), 400
+
+@app.route("/svr", methods=["GET"])
+def get_svr_route():
+    svr = getSvr()
+    return jsonify({"ServerId": svr}), 200
+
+
+def run_flask():
+    app.run(debug=True, use_reloader=False)
+
+def initilization():
+    try:
+        subprocess.Popen("Xeno-v1.1.85/Xeno.exe")
+    except Exception as e:
+        print(f"Error opening Xeno.. {e}")
+
+    try:
+        subprocess.Popen("MultiRoblox.exe")
+    except Exception as e:
+        print(f"Error opening MultiRoblox.. {e}")
+    time.sleep(5)
+
+    path = "Xeno-v1.1.85/autoexec/script.lua"
+    if os.path.exists(path):
+        with open(path, "r", encoding='utf-8') as f:
+            scriptContent = f.read()
+        if DefaultScrpt not in scriptContent:
+            with open(path, "a", encoding='utf-8') as f:
+                f.write(f"\n{DefaultScrpt}")
+    else:
+        with open(path, "w", encoding='utf-8') as f:
+            f.write(DefaultScrpt)
+            print(f"Hey! We noticed that you don't have a file in the path {path}.. One was created! (PS: PUT YOUR SCRIPT IN '-- put your script here'")
+
+    path = "cookies.txt"
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            content = f.read()
+            if content == "":
+                print(f"No cookies were detected in the path: {path}. You should fix that.")
+            elif not content.startswith("_|WARNING:-DO-NOT-SHARE-THIS."):
+                print("We have detected that your cookies.txt might be invalid. Make sure that you paste in the full cookie. It must start with '_|WARNING:-DO-NOT-SHARE-THIS.'")
+                raise Exception("Invalid cookie file")
+    else:
+        print(f"Could not find the file {path}.. Creating the file. You must restart the script and paste in your cookies.")
+        with open(path, "w") as f:
+            pass
+
+    while True:
+        try:
+            num = int(input("How many instances would you like to run?: "))
+            if num > 0:
+                break
+            else:
+                print("Please enter a number greater than 0.")
+        except ValueError:
+            print("Invalid number. Please try again.")
+
+    placeId = None
+    while True:
+        try:
+            print("(IF NO OTHER PROMT HAS APPEARED, RESTART THE SCRIPT.)")
+            placeId = int(input("What is the placeId? NUMBERS ONLY:"))
+            break
+        except Exception as e:
+            print(f"Error in converting placeId to int: {e}. Looping.. ")
+    path = "Xeno-v1.1.85/autoexec/script.lua"
+    while True:
+        answer = input("Would you like the instances to server hop? (Y/N): ")
+
+        if answer.lower() == "y":
+            global delay
+            delay = getTime()
+            print("Processing...")
+            threading.Thread(target=LoopSvr, args=(placeId,)).start()
+            with open(path, "r") as f:
+                scriptContent = f.read()
+
+            global ServerHopScript
+            if not ServerHopScript in scriptContent:
+                with open(path, "w") as f:
+                    f.write(f"{ServerHopScript}\n{scriptContent}")
+                break
+            break
+        elif answer.lower() == "n":
+            with open(path, "r") as f:
+                scriptContent = f.read()
+            if ServerHopScript is not None and ServerHopScript in scriptContent:
+                    print("We have detected the serverhop script inside of the script file and we removed it.")
+                    new_content = scriptContent.replace(ServerHopScript, "")
+                    with open(path, "w") as f:
+                        f.write(new_content)
+            break
+
+    while True:
+        answer = input("Would you like to enable webhooks? (Y/N) ").lower().replace(" ", "")
+        if answer == "y":
+            delay = getTime()
+            global webhookUrl
+            webhookUrl = input("What is the link to your webhook token?")
+            print("Processing..")
+            with open(path, "r") as f:
+                scriptContent = f.read()
+            if not WebhookScript in scriptContent:
+                with open(path, "w") as f:
+                    f.write(f"{WebhookScript}\n{scriptContent}")
+                break
+            break
+        elif answer == "n":
+            with open(path, "r") as f:
+                scriptContent = f.read()
+            if WebhookScript is not None and WebhookScript in scriptContent:
+                print("We have detected the WebhookScript script inside of the script file and we removed it.")
+                new_content = scriptContent.replace(WebhookScript, "")
+                with open(path, "w") as f:
+                    f.write(new_content)
+            break
+        else:
+            print("Invalid text entered. Looping..")
+
+    with open(path, "r") as f:
+        scriptContent = f.read()
+        if "-- put your script here" in scriptContent:
+            while True:
+                answer = input(
+                    "We detected that you havent pasted in a script yet. Did you fix it? Y/Y (In the auto execute file)").replace(" ", "")
+
+                if answer.lower() == "y":
+                    break
+                else:
+                    print(
+                        "It seems like you didnt type 'y'. The script will not continue until you say it correctly.")
+    try:
+        path = "cookies.txt"
+        with open(path, "r") as f:
+            cookies = f.read().splitlines()
+
+        for i in range(num):
+            status = LoginProcess(cookies[i], placeId)
+            if status == "Error":
+                raise Exception("Restart the script. A fatal error has occured")
+                break
+            time.sleep(5)
+
+    except Exception as e:
+        print(f"Error launching instances. {e}")
+        return
+
+    print("Now that all instances are launched you can now use commands to control them.")
+    help = """Command list: (MUST INCLUDE [] WHEN USING COMMANDS THAT REQUIRE THEM)
+        'logout all': Logs out of all cookies (THIS WILL RESET THE COOKIES AND WILL NOT TERMINATE THE INSTANCES)
+        'logout [-- put the cookie here]': Logs out for that specific cookie (THIS WILL RESET THE COOKIE AND WILL NOT TERMINATE THE INSTANCES)
+        'stop all': Terminates all instances
+        'count instances': Tells you how many instances are running
+        'start instance [-- put the cookie here]': Starts a new instance with the cookie and adds it to the cookies.txt
+        'change script [-- your script here]': Changes the script the instances will run (This will force the instances to restart)
+        'change place [your placeid here]: Changes the place that the instances are in (This will force the instances to restart)
+        'help': Re-prints this message
+    """
+    print(help)
+
+    while True:
+        cmd = input("What is your command?\n").strip()
+        try:
+            if cmd == "logout all":
+                logout_all_instances()
+            elif cmd == "help":
+                print(help)
+            elif cmd  == "stop all":
+                stop_all()
+            elif cmd == "count instances":
+                num = count_instances()
+                print(f"Number of running instances: {num}")
+            elif cmd.startswith("change place [") and cmd.endswith("]"):
+                place = cmd[len("change place ["):-1].strip()
+                stop_all()
+                print("Stopped all instaces.. Now we will start them again..")
+                path = "cookies.txt"
+                with open(path, "r") as f:
+                    cookies = f.read().splitlines()
+
+                for i in range(num):
+                    status = LoginProcess(cookies[i], place)
+                    if status == "Error":
+                        raise Exception("Restart the script. A fatal error has occured")
+                        break
+                    time.sleep(5)
+
+            elif cmd.startswith("logout [") and cmd.endswith("]"):
+                cookie = cmd[len("logout ["):-1].strip()
+                logout_instance(cookie)
+
+            elif cmd.startswith("start instance [") and cmd.endswith("]"):
+                placeId = int(input("What is the place id? (MUST BE NUMBERS:"))
+                cookie = cmd[len("start instance ["):-1].strip()
+                start_instance(cookie, placeId)
+                with open("cookies.txt", "a") as f:
+                    content = f.read()
+                    if not cookie in content:
+                        f.write(f"{content}\n{cookie}")
+                    else:
+                        print("That cookie is already in the cookies.txt file. ")
+
+            elif cmd.startswith("change script [") and cmd.endswith("]"):
+                new_script = cmd[len("change script ["):-1].strip()
+                change_script(new_script)
+                stop_all()
+                print("Stopped all instaces.. Now we will start them again..")
+                path = "cookies.txt"
+                with open(path, "r") as f:
+                    cookies = f.read().splitlines()
+
+                for i in range(num):
+                    status = LoginProcess(cookies[i], place)
+                    if status == "Error":
+                        raise Exception("Restart the script. A fatal error has occured")
+                        break
+                    time.sleep(5)
+
+            else:
+                print("Invalid command. Please check your syntax.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    threading.Thread(target=initilization, daemon=True).start()
+    run_flask()
+functions.py:
+from imports import *
+AuthTickets = {}
+ServerHop = None
+SERVERLISTS = []
+RUNNING_INSTANCES = {}
+def get_csrf_token(session, roblox_cookie):
+    session.cookies.set(".ROBLOSECURITY", roblox_cookie)
+    response = session.post("https://auth.roblox.com/v2/logout")
+
+    if "X-CSRF-TOKEN" in response.headers:
+        return response.headers["X-CSRF-TOKEN"]
+
+    print(f"Cookie was: {roblox_cookie}")
+    print(f"Session was: {session}")
+
+    print("❌ Failed to retrieve CSRF Token!")
+    print(f"❌ Response Code: {response.status_code}")
+    print(f"❌ Response Content: {response.text}")
+    return None
+
+def get_authentication_ticket(roblox_cookie):
+    session = requests.Session()
+    csrf_token = get_csrf_token(session, roblox_cookie)
+
+    if not csrf_token:
+        print("❌ CSRF token retrieval failed.")
+        return ""
+
+    session.cookies.set(".ROBLOSECURITY", roblox_cookie)
+    session.headers.update({
+        "User-Agent": "RobloxLauncher",
+        "Referer": "https://www.roblox.com/",
+        "X-CSRF-TOKEN": csrf_token
+    })
+
+    response = session.post("https://auth.roblox.com/v1/authentication-ticket", json={})
+
+    if response.status_code == 200 and "RBX-Authentication-Ticket" in response.headers:
+        print("✅ Successfully retrieved authentication ticket.")
+        authTicket = response.headers["RBX-Authentication-Ticket"]
+        print(authTicket)
+        global AuthTickets
+        AuthTickets[roblox_cookie] = authTicket
+        return authTicket
+
+    print(f"❌ Response Code: {response.status_code}")
+    print(f"❌ Response Content: {response.text}")
+    print("Most likely the Cookie was incorrect.")
+    return ""
+
+def logout_roblox(auth_ticket, cookie):
+    session = requests.Session()
+    csrf_token = get_csrf_token(session, cookie)
+
+    if not csrf_token:
+        print("❌ CSRF Token for logout not found.")
+        return
+
+    session.cookies.set(".ROBLOSECURITY", cookie)
+    session.headers.update({
+        "User-Agent": "RobloxLauncher",
+        "X-CSRF-TOKEN": csrf_token
+    })
+
+    response = session.post("https://auth.roblox.com/v1/logout", json={})
+
+    if response.status_code == 200:
+        print("✅ Successfully logged out.")
+    else:
+        print(f"❌ Logout failed. Response: {response.status_code}")
+        return "Error"
+
+
+def launch_roblox_game(auth_ticket, place_id, cookie):
+    try:
+        print(f"Launching Roblox game for PlaceId: {place_id}")
+        uri = (
+            f"roblox-player:1+launchmode:play"
+            f"+gameinfo:{auth_ticket}"
+            f"+qualitylevel:1"
+            f"+taskSchedulerTargetFps:15"
+            f"+antialiasing:false"
+            f"+placelauncherurl:https://assetgame.roblox.com/game/PlaceLauncher.ashx"
+            f"?request=RequestGame&placeId={place_id}"
+        )
+        process = subprocess.Popen(f'start "" "{uri}"', shell=True)
+        RUNNING_INSTANCES[cookie] = process
+
+    except Exception as e:
+        print(f"Failed to launch Roblox game: {e}")
+        return
+    print("Game successfully launched!")
+
+def LoginProcess(cookie, placeId):
+    ticket = get_authentication_ticket(cookie)
+    if ticket == "":
+        print("Error happened in login process..")
+        return "Error"
+    launch_roblox_game(ticket, placeId, cookie)
+
+def getData(placeId):
+    try:
+        response = requests.get(url=f"https://games.roblox.com/v1/games/{placeId}/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100")
+        if response:
+            return response.json()
+        else:
+            print("failed getting data from api")
+    except Exception as e:
+        print(f"error happened in getData function: {e}")
+
+def sortData(response):
+    global  SERVERLISTS
+    serverList = []
+    if response:
+        try:
+            for server in response["data"]:
+                if server["maxPlayers"] -3 >= server["playing"]:
+                    serverList.append(server)
+                    SERVERLISTS = serverList
+
+        except Exception as e:
+            print(f"Erorr happened in sortData function: {e}")
+
+def LoopSvr(placeId):
+    response = getData(placeId)
+    sortData(response=response)
+    time.sleep(5 * 60)
+def getSvr():
+    svr = SERVERLISTS[0]
+    SERVERLISTS.remove(SERVERLISTS[0])
+    svrId = svr["id"]
+    return svrId
+
+def getTime():
+    delay = None
+    while True:
+        try:
+            user_input = input(
+                "How long should we wait? (e.g., 30s, 5m, 1h): ").strip().lower()
+            if user_input.endswith("s"):
+                delay = int(user_input[:-1])
+            elif user_input.endswith("m"):
+                delay = int(user_input[:-1]) * 60
+            elif user_input.endswith("h"):
+                delay = int(user_input[:-1]) * 3600
+
+            else:
+                print("Invalid format. Use s for seconds, m for minutes, or h for hours.")
+                continue
+
+            break
+        except Exception as e:
+            print(f"Invalid input: {e}")
+    return delay
+
+def logout_all_instances():
+    """
+    Stops all running instances by logging out of all associated authentication tickets.
+    """
+    print("Stopping all instances...")
+    for cookie, auth_ticket in AuthTickets.items():
+        if cookie:
+            response = logout_roblox(auth_ticket, cookie)
+    if response == "Error":
+        print("Error in logging out.")
+        return
+    AuthTickets.clear()
+    print("All instances stopped.")
+
+def logout_instance(cookie):
+    """
+    Stops the instance associated with a specific cookie.
+    """
+    auth_ticket = AuthTickets.get(cookie)
+    if auth_ticket:
+        print(f"Stopping instance for cookie: {cookie}")
+        logout_roblox(auth_ticket, cookie)
+        del AuthTickets[cookie]
+        print(f"Instance for cookie {cookie} stopped.")
+    else:
+        print(f"No authentication ticket found for cookie {cookie}.")
+
+def start_instance(cookie, placeId):
+    """
+    Starts a new instance with the provided cookie and adds it to the AuthTickets.
+    """
+    if cookie:
+        print(f"Starting instance for cookie: {cookie}")
+        LoginProcess(cookie, placeId)
+    else:
+        print("Cookie not provided.")
+
+def change_script(new_script):
+    """
+    Changes the script being executed by the instances.
+    Replaces the code inside the pcall block with new_script.
+    """
+    if new_script:
+        print("Changing script...")
+        path = "Xeno-v1.1.85/autoexec/script.txt"
+
+        with open(path, "r") as f:
+            script_content = f.read()
+
+        # Find the start and end of the pcall block
+        start_marker = "local success, message = pcall(function()\n"
+        end_marker = "\nend)"
+
+        start_index = script_content.find(start_marker)
+        end_index = script_content.find(end_marker, start_index)
+
+        if start_index == -1 or end_index == -1:
+            raise Exception("Script markers not found.")
+
+        # Rebuild script with the new content
+        updated_script = (
+            script_content[:start_index + len(start_marker)] +
+            f"\t{new_script}\n" +
+            script_content[end_index:]
+        )
+
+        with open(path, "w") as f:
+            f.write(updated_script)
+        print("Script successfully updated.")
+    else:
+        print("No script provided.")
+
+def count_instances():
+    return len(RUNNING_INSTANCES)
+
+
+def stop_all():
+    global RUNNING_INSTANCES
+    if len(RUNNING_INSTANCES) == 0:
+        print("There are no current running instances.")
+        return
+
+    # Attempt to terminate processes gracefully first
+    for cookie, process in RUNNING_INSTANCES.items():
+        if process:
+            process.terminate()
+            print(f"✅ Termination requested for Roblox instance associated with cookie {cookie}.")
+            process.wait(timeout=1)  # Wait for a short duration to allow graceful shutdown
+            if process.poll() is None:  # Process is still running
+                print(f"❌ Process for cookie {cookie} did not terminate in time.")
+
+    # After attempting graceful shutdown, force kill processes
+    kill_all_roblox_processes()
+
+    AuthTickets.clear()  # Clear the authentication tickets
+    RUNNING_INSTANCES.clear()  # Clear the running instances
+    print("All instances stopped.")
+def kill_all_roblox_processes():
+    try:
+        print("Killing all Roblox processes...")
+        os.system("taskkill /f /im RobloxPlayerBeta.exe")  # Adjust based on the actual process name
+        print("✅ All Roblox processes terminated.")
+    except Exception as e:
+        print(f"❌ Failed to kill processes: {e}")
+
+imports.py:
+import time
+import requests
+import subprocess
+from flask import Flask, request, jsonify
+import threading
+import os
+import json
+from pathlib import Path
