@@ -1,0 +1,541 @@
+main.py:
+import time
+
+from functions import *
+from imports import *
+
+
+def main():
+    UserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    options = Options()
+
+    options.add_argument(f"--user-agent={UserAgent}")
+    driver = webdriver.Chrome(options=options)
+    try:
+        driver.get("https://www.roblox.com")
+    except Exception as e:
+        print(f"Error loading roblox.com: {e}")
+        return
+    TryLogin(driver=driver, ver="2CAPTCHA")
+    startCaptchaProccess(driver=driver,ver="2CAPTCHA")
+
+    try:
+        while True:
+            time.sleep(1)
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+if __name__ == '__main__':
+    main()
+# driver.quit()
+
+functions.py:
+
+import time
+
+import requests
+
+from imports import *
+from main import *
+
+APIKEY = ""
+APIKEY_ANTICAPTHCA = ""
+API_DOMAIN = "roblox-api.arkoselabs.com"
+APIURL_ANTI ="https://api.anti-captcha.com/createTask"
+APIURL_2CAPTCHA = "https://api.2captcha.com"
+
+def getRanMonth():
+
+    ran = random.randint(1, 12)
+
+    match ran:
+        case 1:
+            ran = "Jan"
+        case 2:
+            ran = "Feb"
+        case 3:
+            ran = "Mar"
+        case 4:
+            ran = "Apr"
+        case 5:
+            ran = "May"
+        case 6:
+            ran = "Jun"
+        case 7:
+            ran = "Jul"
+        case 8:
+            ran = "Aug"
+        case 9:
+            ran = "Sep"
+        case 10:
+            ran = "Oct"
+        case 11:
+            ran = "Nov"
+        case 12:
+            ran = "Dec"
+
+    return ran
+
+def getRanDay():
+    day = random.randint(1,30)
+    if day <=9:
+        day = f"0{day}"
+    return day
+
+def getRanYear():
+    year = random.randint(1998,2006)
+    return year
+
+def getRanUser():
+    try:
+        response = requests.get(url="https://api.api-ninjas.com/v1/randomuser", headers={"X-Api-Key": ""})
+        if response.status_code == requests.codes.ok:
+            username = response.json().get("username")
+            return username
+        else:
+            print(f"Error occured. Status code: {response.status_code}")
+
+    except Exception as e:
+        print(f"Error occered. Error: {e}")
+
+def getRanPw():
+    pw = uuid.uuid4()
+    return str(pw)
+def TEST(driver):
+    while True:
+        try:
+            UserSuggestion = driver.find_element(By.CLASS_NAME, "username-suggestion-pill")
+            UserSuggestion.click()
+            print("clicked suggestion")
+            break
+        except:
+            print("No suggestion found")
+        try:
+            ran = random.randint(20,99)
+            driver.find_element(By.XPATH, "//*[contains(text(), 'This username is already in use.')]")
+            User = getRanUser()
+            User = f"{ran}{User}{ran}"
+            TryLogin(driver=driver, User=User)
+            time.sleep(5)
+            continue
+
+        except:
+            pass
+
+        try:
+            ran = random.randint(20,99)
+            driver.find_element(By.XPATH, "//*[contains(text(), 'Username not appropriate for Roblox.')]")
+            User = getRanUser()
+            User = f"{ran}{User}{ran}"
+            TryLogin(driver=driver, User=User)
+            time.sleep(5)
+            continue
+        except:
+            pass
+
+        try:
+            ran = random.randint(20,99)
+            driver.find_element(By.XPATH, "//*[contains(text(), 'Usernames can be 3 to 20 characters long.')]")
+            driver.refresh()
+            TryLogin(driver=driver)
+            print("Finished running TryLogin")
+            startCaptchaProccess(driver=driver)
+            time.sleep(5)
+            continue
+        except:
+            pass
+
+        break
+
+
+def TryLogin(driver, User = getRanUser(), ver="2CAPTCHA"):
+    time.sleep(5)
+
+    Month_Element = driver.find_element(By.ID, "MonthDropdown")
+    Day_Element = driver.find_element(By.ID, "DayDropdown")
+    Year_Element = driver.find_element(By.ID, "YearDropdown")
+    User_Element = driver.find_element(By.ID, "signup-username")
+    Password_Element = driver.find_element(By.ID, "signup-password")
+
+    Month = getRanMonth()
+    Day = str(getRanDay())
+    Year = str(getRanYear())
+    Password = getRanPw()
+
+    Select(Month_Element).select_by_value(Month)
+    Select(Day_Element).select_by_value(Day)
+    Select(Year_Element).select_by_value(Year)
+    Password_Element.send_keys(Password)
+    User_Element.send_keys(User)
+    time.sleep(5)
+    TEST(driver=driver)
+    time.sleep(5)
+    try:
+        SignUp_Element = driver.find_element(By.ID, "signup-button")
+        time.sleep(5)
+        SignUp_Element.click()
+        time.sleep(10)
+        goDeeper2(driver=driver)
+    except Exception as e:
+        print(f"Erorr clicking signup button: {e}")
+
+
+def solve_captcha(public_key, page_url, blob,driver):
+    time.sleep(20)
+    task_payload = {
+        "clientKey": APIKEY,
+        "task": {
+            "type": "FunCaptchaTaskProxyless",
+            "websiteURL": page_url,
+            "websitePublicKey": public_key,
+            "funcaptchaApiJSSubdomain": "roblox-api.arkoselabs.com",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+            "data": {"blob": blob}
+        }
+    }
+
+    try:
+        response = requests.post(f"{APIURL_2CAPTCHA}/createTask", json=task_payload).json()
+        if response.get("errorId") != 0:
+            print(f"Error creating task: {response}")
+            return None
+
+        task_id = response.get("taskId")
+        print(f"Task created successfully. Task ID: {task_id}")
+
+        for attempt in range(30):
+            print(f"Checking task status... Attempt {attempt + 1}/30")
+            time.sleep(10)
+            result = requests.post(f"{APIURL_2CAPTCHA}/getTaskResult", json={"clientKey": APIKEY, "taskId": task_id}).json()
+            print(result)
+
+            if result.get("status") == "ready":
+                token = result.get("solution", {}).get("token")
+                print(f"Captcha solved successfully! Result token: {token}")
+                return token, task_id
+
+            elif result.get("errorCode") == "ERROR_CAPTCHA_UNSOLVABLE" :
+                print("Error: Captcha is unsolvable.")
+                break
+            else:
+                print("Captcha not ready yet, retrying...")
+        print("Task timed out or failed.")
+        driver.refresh()
+        TryLogin(driver=driver)
+        startCaptchaProccess(driver=driver, ver="2CAPTCHA")
+    except Exception as e:
+        print(f"failed somewhere in the solve captcha proccess. {e}")
+    return None
+
+def submit_captcha(driver, token, task_ID=None):
+    try:
+        goDeeper(driver=driver, token=token, task_ID=task_ID, ver= "TOKEN")
+
+    except Exception as e:
+        print(f"Error while submitting captcha: {e}")
+
+def goDeeper(driver, ver, token=None,checkpoitnt1=False, task_ID=None):
+    if checkpoitnt1:
+        iframe = driver.find_elements(By.TAG_NAME, "iframe")
+
+        print(f"Found {len(iframe)}# of iframes in step2. Checkpoint1")
+        for frame in iframe:
+            driver.switch_to.frame(frame)
+
+            nested_iframes = driver.find_elements(By.TAG_NAME, "iframe")
+
+            if nested_iframes:
+                print("found stinky nested in step 2. Checkpoint 1")
+                try:
+                    button = driver.find_element(By.XPATH, "//button[text()='Submit']")
+                    button.click()
+                    print("Captcha form submitted!")
+
+                    return
+                except:
+                    goDeeper(driver=driver, token=token, checkpoitnt1=True, ver= "TOKEN")
+            try:
+                for x in range(10):
+                    button = driver.find_element(By.XPATH, "//button[text()='Submit']")
+                    button.click()
+                    time.sleep(5)
+                    print("Captcha form submitted!")
+
+                try:
+                    driver.find_element(By.XPATH, "//button[text()='Try again']")
+                    print("Captcha solved was inncorect. Reporting as bad and Reloading..")
+                    url = f"https://2captcha.com/res.php?key={APIKEY}&action=reportbad&id={task_ID}"
+                    response = requests.get(url=url)
+
+                    if response.status_code == 200:
+                        print("Successfully reported incorrect captcha.")
+                    else:
+                        print(f"Failed reporting incorrect captcha. {response.status_code}")
+                    driver.refresh()
+                    TryLogin(driver=driver)
+                    startCaptchaProccess(driver=driver, ver="2CAPTCHA")
+                except Exception as e:
+                    """
+                    print("Captcha solved correctly!!!! Reporting token as good")
+                    url = f"https://2captcha.com/res.php?key={APIKEY}&action=reportbad&id={task_ID}"
+                    response = requests.get(url=url)
+
+                    if response.status_code == 200:
+                        print("Successfully reported correct captcha.")
+                    else:
+                        print(f"Failed reporting correct captcha. {response.status_code}")
+                    return
+                    """
+                    print(f"Error in goDeeper: {e}")
+
+            except Exception as e:
+                print(f"Error injecting token. {e} Restarting again")
+                TryLogin(driver=driver)
+                startCaptchaProccess(driver=driver,ver="2CAPTCHA")
+
+    if ver == "TOKEN":
+        iframe = driver.find_elements(By.TAG_NAME, "iframe")
+
+        print(f"Found {len(iframe)}# of iframes in step2.")
+        for frame in iframe:
+            driver.switch_to.frame(frame)
+
+            nested_iframes = driver.find_elements(By.TAG_NAME, "iframe")
+
+            if nested_iframes:
+                print("found stinky nested in step 2.")
+                try:
+                    captcha_input = driver.find_element(By.ID, "FunCaptcha-Token")
+                    driver.execute_script("arguments[0].setAttribute('value', arguments[1])", captcha_input, token)
+                    print("Captcha token injected successfully!")
+                    try:
+                        time.sleep(2)
+                        for x in range(10):
+                            button = driver.find_element(By.XPATH, "//button[text()='Submit']")
+                            button.click()
+                            time.sleep(5)
+                            print("Captcha form submitted!")
+                        try:
+                            driver.find_element(By.XPATH, "//button[text()='Try again']")
+                            print("Captcha solved was inncorect. Reloading..")
+                            driver.refresh()
+                            TryLogin(driver=driver)
+                            startCaptchaProccess(driver=driver, ver="2CAPTCHA")
+                        except:
+                            pass
+                        return
+                    except:
+                        goDeeper(driver=driver, token=token, checkpoitnt1=True,ver= "TOKEN")
+
+                    return
+                except:
+                    goDeeper(driver=driver, token=token, checkpoitnt1=True,ver= "TOKEN")
+            try:
+                captcha_input = driver.find_element(By.ID, "FunCaptcha-Token")
+                driver.execute_script("arguments[0].setAttribute('value', arguments[1])", captcha_input, token)
+                print("Captcha token injected successfully!")
+
+                time.sleep(2)
+
+                for x in range(10):
+                    button = driver.find_element(By.XPATH, "//button[text()='Submit']")
+                    button.click()
+                    time.sleep(5)
+                    print("Captcha form submitted!")
+                try:
+                    driver.find_element(By.XPATH, "//button[text()='Try again']")
+                    print("Captcha solved was inncorect. Reloading..")
+                    driver.refresh()
+                    TryLogin(driver=driver)
+                    startCaptchaProccess(driver=driver,ver="2CAPTCHA")
+                except:
+                    pass
+                return
+            except Exception as e:
+                print(f"Error injecting token. {e} Restarting again")
+                TryLogin(driver=driver)
+                startCaptchaProccess(driver=driver, ver="2CAPTCHA")
+
+def goDeeper2(driver):
+    time.sleep(15)
+    while True:
+        try:
+            driver.find_element(By.ID, "text-loading")
+            print("stinky text loading")
+            driver.switch_to.default_content()
+            time.sleep(5)
+        except:
+            break
+
+
+    iframe = driver.find_elements(By.TAG_NAME, "iframe")
+    print(f"Found {len(iframe)}# of iframes in step1.")
+    if len(iframe) == 0:
+        print("bro why no iframes.")
+        return
+    for frame in iframe:
+        driver.switch_to.frame(frame)
+
+        nested_iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        if nested_iframes:
+            print("found stinky nested in step 1.")
+            while True:
+                try:
+                    driver.find_element(By.ID, "text-loading")
+                    print("stinky text loading")
+                    driver.switch_to.default_content()
+                    time.sleep(5)
+                except:
+                    break
+            goDeeper2(driver=driver)
+            return
+        try:
+            while True:
+                try:
+                    driver.find_element(By.ID, "text-loading")
+                    print("stinky text loading")
+                    driver.switch_to.default_content()
+                    time.sleep(5)
+                except:
+                    break
+            time.sleep(10)
+            button = driver.find_element(By.XPATH, "//button[@data-theme='home.verifyButton']")
+            button.click()
+            print("Clicked button to start captcha!")
+            driver.switch_to.default_content()
+            break
+        except Exception as e:
+            print(f"Error finding start captcha button. going back to main page to find.")
+            driver.switch_to.default_content()
+            goDeeper2(driver=driver)
+            return
+
+def startCaptchaProccess(driver, ver):
+    try:
+        time.sleep(5)
+        iframe = driver.find_element(By.TAG_NAME, "iframe")
+        captcha_url = iframe.get_attribute("src")
+        print("Captcha URL:", captcha_url)
+        if captcha_url and "publicKey=" in captcha_url:
+            publicKey = captcha_url.split("publicKey=")[1].split("&")[0]
+            Blob = captcha_url.split("dataExchangeBlob=")[1].split("&")[0]
+            print(f"Public key: {publicKey}")
+            print(f"Blob: {Blob}")
+            driver.switch_to.frame(iframe)
+
+
+
+
+            print("starting to solve captcha")
+            if ver == "2CAPTCHA":
+                token, task_ID = solve_captcha(publicKey, page_url=driver.current_url, blob=Blob, driver=driver)
+
+                if token:
+                    print("Injecting token..")
+                    submit_captcha(driver, token, task_ID)
+            elif ver == "ANTI":
+                startCaptchaProccessAntiApi(publicKey, page_url=driver.current_url, blob=Blob, driver=driver)
+
+        else:
+            print("Error: Captcha iframe source url not found")
+    except Exception as e:
+        print(f"Error happened in start captcha proccess: {e}")
+
+
+def goDeeper3(driver,frame1= None):
+    iframe = driver.find_elements(By.TAG_NAME, "iframe")
+    print(f"Found {len(iframe)}# of iframes in step 1.")
+    if len(iframe) == 0:
+        print("bro why no iframes.")
+        return
+    for frame in iframe:
+        driver.switch_to.frame(frame)
+
+        nested_iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        currFrame = frame
+        if nested_iframes:
+            print("found stinky nested in step 1.")
+            try:
+                driver.find_element(By.XPATH, '//a[@class="status" and text()="Captcha could not be solved by 5 different workers"]')
+                driver.refresh()
+                TryLogin(driver=driver)
+                goDeeper3(driver=driver)
+            except:
+                pass
+            try:
+                driver.find_element(By.XPATH, '//a[@class="status" and text()="Account has zero or negative balance"]')
+                print("No more balance.")
+            except:
+                pass
+            try:
+                driver.find_element(By.XPATH, '//a[@class="status" and text()="Could not load captcha provider widget in worker browser. Please try again."]')
+                driver.refresh()
+                TryLogin(driver=driver)
+                time.sleep((120))
+                goDeeper3(driver=driver)
+            except:
+                goDeeper3(driver=driver, frame1 = currFrame)
+
+        try:
+            driver.find_element(By.XPATH, '//a[@class="status" and text()="Captcha could not be solved by 5 different workers"]')
+        except:
+            pass
+        try:
+            driver.find_element(By.XPATH, '//a[@class="status" and text()="Account has zero or negative balance"]')
+            print("No more balance.")
+        except:
+            pass
+        try:
+            driver.find_element(By.XPATH, '//a[@class="status" and text()="Could not load captcha provider widget in worker browser. Please try again."]')
+        except:
+            print("failed all checks for nested frames. could not find eleement.")
+        print("Succesfully passed step1 goDeeper3")
+
+def startCaptchaProccessAntiApi(public_key, page_url, blob,driver):
+    while True:
+        time.sleep(10)
+        solver = funcaptchaProxyless()
+        solver.set_verbose(1)
+        solver.set_key(APIKEY_ANTICAPTHCA)
+        solver.set_website_url(page_url)
+        solver.set_website_key(public_key)
+        solver.set_js_api_domain(API_DOMAIN)
+        solver.set_data_blob({"blob": blob})
+        solver.set_soft_id(0)
+
+        token = solver.solve_and_return_solution()
+        if token != 0:
+            print("result token: " + token)
+            break
+        else:
+            print("task finished with error " + solver.error_code)
+
+imports.py:
+import os
+import sys
+from selenium.webdriver.chrome.service import  Service
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import  Options
+from selenium.webdriver.common.by import  By
+from selenium.webdriver.support.ui import  Select
+import undetected_chromedriver as uc
+from selenium_recaptcha_solver import RecaptchaSolver
+from selenium.webdriver.support.ui import  WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import random
+from seleniumwire import webdriver
+import blinker
+import base64
+from twocaptcha import TwoCaptcha
+import  time
+import json
+from anticaptchaofficial.funcaptchaproxyless import *
+from anticaptchaofficial.funcaptchaproxyon import *
+import uuid
+from speech_recognition import AudioData
+from urllib.parse import urlparse, parse_qs
+import services
+import torch
+import requests
+from hcaptcha_solver import hcaptcha_solver
