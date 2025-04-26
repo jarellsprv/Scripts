@@ -1,4 +1,4 @@
-main.py
+-- main.py
 import subprocess
 import time
 
@@ -370,7 +370,7 @@ if __name__ == "__main__":
     run_flask()
 
 
-functions.py:
+-- functions.py:
 from imports import *
 AuthTickets = {}
 ServerHop = None
@@ -631,7 +631,7 @@ def kill_all_roblox_processes():
     except Exception as e:
         print(f"❌ Failed to kill processes: {e}")
 
-imports.py:
+-- imports.py:
 import time
 import requests
 import subprocess
